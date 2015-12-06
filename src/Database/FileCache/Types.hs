@@ -6,6 +6,8 @@ data Function = InsertFile
               | RemoveFile
               | LastFileId
 
+              | FileExists
+
               | UpdateName
               | UpdateLocation
               | UpdateSize
@@ -14,8 +16,6 @@ data Function = InsertFile
               | UpdateUser
               | UpdateGroup
               | UpdateOther
-
-              | FileExists
 
               | InsertHash
               | RemoveHash

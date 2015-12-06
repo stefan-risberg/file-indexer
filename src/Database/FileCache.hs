@@ -5,9 +5,12 @@ module Database.FileCache
 , create
 
 , insertFile
+, insertFile'
 , removeFile
 , lastFileId
 , lastFileId'
+
+, fileExists
 
 , updateName
 , updateLocation
@@ -27,7 +30,8 @@ module Database.FileCache
 ) where
 
 import Database.FileCache.Types
-import Database.Types
+import Database.Types hiding (SqlConnT (conn, st))
+import qualified Database.Types as DB
 import Database.HDBC
 import Database.HDBC.Sqlite3 (Connection)
 import Data.Map.Strict ((!), Map)
@@ -58,6 +62,11 @@ sql = [ (InsertFile, "INSERT INTO files (id, name, location, size, access_time, 
                      \ DELETE FROM hashes \n\
                      \  WHERE file_id=?;")
       , (LastFileId, "SELECT MAX(id) FROM files;")
+
+      , (FileExists, "SELECT COUNT(f.id) \n\
+                     \  FROM files AS f \n\
+                     \ WHERE f.location = ? \n\
+                     \   AND f.name = ?;")
 
       , (UpdateName, "UPDATE files \n\
                      \   SET name=? \n\
@@ -135,15 +144,14 @@ create c = do
                  \     , FOREIGN KEY (file_id) REFERENCES files(id) \n\
                  \     );" []
 
--- | Add new file.
+-- | Add a file that has an id already.
 insertFile :: SqlConn -- ^ DB connection.
-           -> File    -- ^ File to insert.
-           -> IO File -- ^ File with update id field.
-insertFile c@(SqlConn _ fm) file = do
-    i <- liftM (+1) (lastFileId' c)
-    let ins       = fm ! SqlFileCashe InsertFile
-        (d, f)    = splitFileName (F.path file)
-        param     = [ toSql i
+           -> File -- ^ File to insert.
+           -> IO ()
+insertFile c file =
+    let ins = DB.st c ! SqlFileCashe InsertFile
+        (d, f) = splitFileName (F.path file)
+        param     = [ toSql $ F.id file
                     , toSql f
                     , toSql d
                     , toSql $ F.size file
@@ -153,16 +161,22 @@ insertFile c@(SqlConn _ fm) file = do
                     , toSql $ F.group file
                     , toSql $ F.other file
                     ]
+    in void $ execute ins param
 
-    void $ execute ins param
-    return file { id = i }
+-- | Add new file.
+insertFile' :: SqlConn -- ^ DB connection.
+            -> File    -- ^ File to insert.
+            -> IO File -- ^ File with update id field.
+insertFile' c file = do
+    liftM (+1) (lastFileId' c)
+    >>= \i -> insertFile c (file { id = i }) >> return file { id = i }
 
 -- | Remove file.
 removeFile :: SqlConn -- ^ DB connection.
            -> Int     -- ^ Id of file to remove.
            -> IO ()
-removeFile (SqlConn _ fm) i =
-    let st = fm ! SqlFileCashe RemoveFile
+removeFile c i =
+    let st = DB.st c ! SqlFileCashe RemoveFile
         sI = toSql i
         param = [ sI, sI ]
     in void $! execute st param
@@ -170,7 +184,7 @@ removeFile (SqlConn _ fm) i =
 -- | Get last file id. If Nothing the file table is empty.
 lastFileId :: SqlConn        -- ^ DB connection.
            -> IO (Maybe Int) -- ^ Last id.
-lastFileId (SqlConn _ fm) =
+lastFileId (SqlConnT _ fm) =
     let st = fm ! SqlFileCashe LastFileId
         conv r = Just $ fromSql (r ! "id")
     in liftM (maybe Nothing conv)
@@ -181,6 +195,17 @@ lastFileId (SqlConn _ fm) =
 lastFileId' :: SqlConn -- ^ DB connection.
             -> IO Int  -- ^ Last id.
 lastFileId' = liftM (fromMaybe 0) . lastFileId
+
+fileExists :: SqlConn -- ^ DB connection.
+           -> File -- ^ File.
+           -> IO Bool
+fileExists c f =
+    let st = DB.st c ! SqlFileCashe FileExists
+        (d', f') = splitFileName (F.path f)
+        param = [ toSql d', toSql f' ]
+        conv r = (fromSql $ r ! "COUNT(f.id)" :: Int) > 0
+    in liftM (maybe False conv)
+             (execute st param >> fetchRowMap st)
 
 -- | Generic single field updater.
 updateField :: forall a. (Convertible a SqlValue)
@@ -197,63 +222,63 @@ updateName :: SqlConn -- ^ DB connection.
            -> Int     -- ^ File id.
            -> Text    -- ^ New name.
            -> IO ()
-updateName (SqlConn _ fm) = updateField (fm ! SqlFileCashe UpdateName)
+updateName (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateName)
 
 -- | Update location of file.
 updateLocation :: SqlConn  -- ^ DB connection.
                -> Int      -- ^ File id.
                -> FilePath -- ^ New location.
                -> IO ()
-updateLocation (SqlConn _ fm) = updateField (fm ! SqlFileCashe UpdateLocation)
+updateLocation (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateLocation)
 
 -- | Update size of file.
 updateSize :: SqlConn -- ^ DB connection.
            -> Int     -- ^ File id.
            -> Int64   -- ^ New size.
            -> IO ()
-updateSize (SqlConn _ fm) = updateField (fm ! SqlFileCashe UpdateSize)
+updateSize (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateSize)
 
 -- | Update access time of tile.
 updateAccessTime :: SqlConn -- ^ DB connection.
                  -> Int     -- ^ File id.
                  -> UTCTime -- ^ New access time.
                  -> IO ()
-updateAccessTime (SqlConn _ fm) = updateField (fm ! SqlFileCashe UpdateAccessTime)
+updateAccessTime (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateAccessTime)
 
 -- | Update modification time of file
 updateModTime :: SqlConn -- ^ DB connection.
               -> Int     -- ^ File id.
               -> UTCTime -- ^ New modification time.
               -> IO ()
-updateModTime (SqlConn _ fm) = updateField (fm ! SqlFileCashe UpdateModTime)
+updateModTime (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateModTime)
 
 -- | Update user permissions of file.
 updateUser :: SqlConn      -- ^ DB connection.
            -> Int          -- ^ File id.
            -> P.Permission -- ^ New user permission.
            -> IO ()
-updateUser (SqlConn _ fm) = updateField (fm ! SqlFileCashe UpdateUser)
+updateUser (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateUser)
 
 -- | Update group permissions of file.
 updateGroup :: SqlConn      -- ^ DB connection.
             -> Int          -- ^ File id.
             -> P.Permission -- ^ New group permission.
             -> IO ()
-updateGroup (SqlConn _ fm) = updateField (fm ! SqlFileCashe UpdateGroup)
+updateGroup (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateGroup)
 
 -- | Update other permissions of file.
 updateOther :: SqlConn      -- ^ DB connection.
             -> Int          -- ^ File id.
             -> P.Permission -- ^ New other permission.
             -> IO ()
-updateOther (SqlConn _ fm) = updateField (fm ! SqlFileCashe UpdateOther)
+updateOther (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateOther)
 
 -- | Insert a new hash for a file.
 insertHash :: SqlConn -- ^ DB connection.
            -> Int     -- ^ File id.
            -> Text    -- ^ Hash.
            -> IO ()
-insertHash (SqlConn _ fm) i h =
+insertHash (SqlConnT _ fm) i h =
     let st = fm ! SqlFileCashe InsertHash
         param = [ toSql h, toSql i ]
     in void $ execute st param
@@ -262,7 +287,7 @@ insertHash (SqlConn _ fm) i h =
 removeHash :: SqlConn -- ^ DB connection.
            -> Int     -- ^ Id of file.
            -> IO ()
-removeHash (SqlConn _ fm) i =
+removeHash (SqlConnT _ fm) i =
     let st = fm ! SqlFileCashe RemoveHash
         param = [ toSql i ]
     in void $ execute st param
@@ -272,7 +297,7 @@ updateHash :: SqlConn -- ^ DB connection.
            -> Int     -- ^ File id.
            -> Text    -- ^ Hash as text.
            -> IO ()
-updateHash (SqlConn _ fm) = updateField (fm ! SqlFileCashe UpdateHash)
+updateHash (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateHash)
 
 -- | Update hash of a file. Hash is given as a Word128 but is converted to a
 -- text.
@@ -286,7 +311,7 @@ updateHash' c i w = updateHash c i (pack $ showHex w "")
 getUnhashed :: MonadIO m
             => SqlConn -- ^ DB connection.
             -> C.Source m File
-getUnhashed (SqlConn _ f) =
+getUnhashed (SqlConnT _ f) =
     let toFile :: Map String SqlValue
                -> File
         toFile m = let file = fromSql $ m ! "name"

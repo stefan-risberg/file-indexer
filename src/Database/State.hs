@@ -35,14 +35,14 @@ create c = void $
 insert :: Text
        -> SqlConn
        -> IO Int
-insert t (SqlConn _ f) =
-    let ins     = f ! SqlState Insert
-        m       = f ! SqlState MaxId
+insert t c =
+    let ins     = st c ! SqlState Insert
+        m       = st c ! SqlState MaxId
         param i = [toSql i, toSql t]
     in C.nextId m >>= \id_ -> execute ins (param id_) >> return id_
 
 lastState :: SqlConn
           -> IO (Maybe Text)
-lastState (SqlConn _ f) =
-    let l = f ! SqlState LastState
+lastState c =
+    let l = st c ! SqlState LastState
     in void (execute l []) >> C.readHead l

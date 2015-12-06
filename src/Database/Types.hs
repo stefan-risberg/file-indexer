@@ -3,7 +3,8 @@
 module Database.Types
 ( SqlFunc (..)
 , FuncMap
-, SqlConn (..)
+, SqlConnT (..)
+, SqlConn
 ) where
 
 import Database.HDBC
@@ -18,4 +19,9 @@ data SqlFunc = SqlState State.Function
 
 type FuncMap = Map SqlFunc Statement
 
-data SqlConn = SqlConn Connection FuncMap
+data SqlConnT a b = SqlConnT
+    { conn :: a
+    , st :: b
+    }
+
+type SqlConn = SqlConnT Connection FuncMap

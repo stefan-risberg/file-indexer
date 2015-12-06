@@ -150,6 +150,7 @@ main = do c <- DB.connect "fisk.sql"
           --mapM_ (\(i, (fp, _, s)) -> printf "%d %s %s\n" i fp (toSize $ Byte s)) f
 
 
+          DB.commit c
           return ()
 
 --main :: IO ()

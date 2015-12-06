@@ -15,8 +15,9 @@ import Data.Map.Strict hiding (map, foldr)
 
 import Control.Monad (liftM)
 
-connect :: FilePath
-        -> IO SqlConn
+-- | Connect to database
+connect :: FilePath   -- ^ Location of database
+        -> IO SqlConn -- ^ Connection.
 connect loc = do c <- connectSqlite3 loc
                  mapM_ (\f -> f c) [ State.create
                                    , FileCache.create
@@ -24,9 +25,11 @@ connect loc = do c <- connectSqlite3 loc
                  stateFunc <- connect' c SqlState State.sql
                  fileCacheFunc <- connect' c SqlFileCashe FileCache.sql
 
-                 return $ SqlConn c $ fromList $ concat [ stateFunc
-                                                        , fileCacheFunc
-                                                        ]
+                 return $ SqlConnT c
+                        $ fromList
+                        $ concat [ stateFunc
+                                 , fileCacheFunc
+                                 ]
               where
                 connect' :: Connection
                          -> (a -> SqlFunc)
@@ -34,13 +37,15 @@ connect loc = do c <- connectSqlite3 loc
                          -> IO [(SqlFunc, Statement)]
                 connect' c t =
                     let prep = prepare c
-                        m (f, q) = liftM (\st -> (t f, st)) (prep q)
+                        m (f, q) = liftM (\st' -> (t f, st')) (prep q)
                     in mapM m
 
-disconnect :: SqlConn
+-- | Disconnect from the database.
+disconnect :: SqlConn -- ^ DB connection.
            -> IO ()
-disconnect (SqlConn c _) = DB.disconnect c
+disconnect c = DB.disconnect $ conn c
 
-commit :: SqlConn
+-- | Commit changes to the database.
+commit :: SqlConn -- ^ DB connection.
        -> IO ()
-commit (SqlConn c _) = DB.commit c
+commit c = DB.commit $ conn c
