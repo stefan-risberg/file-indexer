@@ -15,7 +15,7 @@ import qualified Database.FileCache.Types as FileCache
 
 data SqlFunc = SqlState State.Function
              | SqlFileCashe FileCache.Function
-             deriving (Eq, Ord)
+             deriving (Eq, Ord, Show)
 
 type FuncMap = Map SqlFunc Statement
 
