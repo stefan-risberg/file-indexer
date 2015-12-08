@@ -167,7 +167,7 @@ insertFile c file =
 insertFile' :: SqlConn -- ^ DB connection.
             -> File    -- ^ File to insert.
             -> IO File -- ^ File with update id field.
-insertFile' c file = do
+insertFile' c file =
     liftM (+1) (lastFileId' c)
     >>= \i -> insertFile c (file { id = i }) >> return file { id = i }
 
