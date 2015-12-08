@@ -129,12 +129,6 @@ create c = do
                  \ , user_per INTEGER NOT NULL \n\
                  \ , group_per INTEGER NOT NULL \n\
                  \ , other_per INTEGER NOT NULL \n\
-                 \ , CONSTRAINT permissions \n\
-                 \        CHECK (user_per >= 0 AND user_per < 8 \n\
-                 \          AND group_per >= 0 AND group_per < 8 \n\
-                 \          AND other_per >= 0 AND other_per < 8) \n\
-                 \ , CONSTRAINT unique_file \n\
-                 \        UNIQUE (location,name) \n\
                  \ , PRIMARY KEY (id)\n\
                  \ );" []
     void $ run c "CREATE TABLE IF NOT EXISTS hashes \n\
@@ -184,9 +178,9 @@ removeFile c i =
 -- | Get last file id. If Nothing the file table is empty.
 lastFileId :: SqlConn        -- ^ DB connection.
            -> IO (Maybe Int) -- ^ Last id.
-lastFileId (SqlConnT _ fm) =
-    let st = fm ! SqlFileCashe LastFileId
-        conv r = Just $ fromSql (r ! "id")
+lastFileId c =
+    let st = DB.st c ! SqlFileCashe LastFileId
+        conv r = Just $ fromSql (r ! "MAX(id)")
     in liftM (maybe Nothing conv)
              (execute st [] >> fetchRowMap st)
 
