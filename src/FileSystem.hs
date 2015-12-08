@@ -10,7 +10,9 @@ import qualified Types.File       as F
 import qualified Types.Permission as P
 
 import           System.FilePath       (( </> ))
-import           System.Directory      (getDirectoryContents)
+import           System.Directory      (getDirectoryContents
+                                       ,canonicalizePath
+                                       )
 import           System.Posix.Files    (getFileStatus
                                        ,isDirectory
                                        ,FileStatus
@@ -79,6 +81,7 @@ getAllFiles fp =
         get' f (d:dirs) = do cont <- directoryContent d
                              let (f', d') = split cont
                              get' (f ++ f') (dirs ++ d')
-    in do content <- directoryContent fp
+    in do content <- canonicalizePath fp
+                     >>= directoryContent
           let (f, d) = split content
           get' f d
