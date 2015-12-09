@@ -161,7 +161,7 @@ insertFile c file =
                     , toSql $ F.group file
                     , toSql $ F.other file
                     ]
-    in void $ execute ins param
+    in void $! execute ins param
 
 -- | Add new file.
 insertFile' :: SqlConn -- ^ DB connection.
@@ -169,7 +169,7 @@ insertFile' :: SqlConn -- ^ DB connection.
             -> IO File -- ^ File with update id field.
 insertFile' c file = do
     liftM (+1) (lastFileId' c)
-    >>= \i -> insertFile c (file { id = i }) >> return file { id = i }
+    >>= \i -> insertFile c (file { id = i }) >> (return $! file { id = i })
 
 -- | Remove file.
 removeFile :: SqlConn -- ^ DB connection.
