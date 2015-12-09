@@ -180,7 +180,10 @@ lastFileId :: SqlConn        -- ^ DB connection.
            -> IO (Maybe Int) -- ^ Last id.
 lastFileId c =
     let st = DB.st c ! SqlFileCashe LastFileId
-        conv r = Just $ fromSql (r ! "MAX(id)")
+        conv r = let r' = r ! "MAX(id)"
+                 in case r' of
+                        SqlNull -> Nothing
+                        a -> Just $! fromSql a
     in execute st [] >> fetchRowMap st
        >>= \i -> return $! maybe Nothing conv i
 
