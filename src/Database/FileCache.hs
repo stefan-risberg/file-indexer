@@ -181,14 +181,15 @@ lastFileId :: SqlConn        -- ^ DB connection.
 lastFileId c =
     let st = DB.st c ! SqlFileCashe LastFileId
         conv r = Just $ fromSql (r ! "MAX(id)")
-    in liftM (maybe Nothing conv)
-             (execute st [] >> fetchRowMap st)
+    in execute st [] >> fetchRowMap st
+       >>= \i -> return $! maybe Nothing conv i
 
 -- | Get last file id. Same as 'lastFileId' except it gives 0 if
 -- table is empty.
 lastFileId' :: SqlConn -- ^ DB connection.
             -> IO Int  -- ^ Last id.
-lastFileId' = liftM (fromMaybe 0) . lastFileId
+lastFileId' c = lastFileId c
+                >>= \i -> return $! fromMaybe 0 i
 
 fileExists :: SqlConn -- ^ DB connection.
            -> File -- ^ File.
@@ -198,8 +199,8 @@ fileExists c f =
         (d', f') = splitFileName (F.path f)
         param = [ toSql d', toSql f' ]
         conv r = (fromSql $ r ! "COUNT(f.id)" :: Int) > 0
-    in liftM (maybe False conv)
-             (execute st param >> fetchRowMap st)
+    in execute st param >> fetchRowMap st
+       >>= \e -> return $! maybe False conv e
 
 -- | Generic single field updater.
 updateField :: forall a. (Convertible a SqlValue)
@@ -209,7 +210,7 @@ updateField :: forall a. (Convertible a SqlValue)
             -> IO ()
 updateField st i n =
     let param = [ toSql n , toSql i ]
-    in void $ execute st param
+    in void $! execute st param
 
 -- | Update name of file.
 updateName :: SqlConn -- ^ DB connection.
@@ -275,7 +276,7 @@ insertHash :: SqlConn -- ^ DB connection.
 insertHash (SqlConnT _ fm) i h =
     let st = fm ! SqlFileCashe InsertHash
         param = [ toSql h, toSql i ]
-    in void $ execute st param
+    in void $! execute st param
 
 -- | Remove hash of a file.
 removeHash :: SqlConn -- ^ DB connection.
@@ -284,7 +285,7 @@ removeHash :: SqlConn -- ^ DB connection.
 removeHash (SqlConnT _ fm) i =
     let st = fm ! SqlFileCashe RemoveHash
         param = [ toSql i ]
-    in void $ execute st param
+    in void $! execute st param
 
 -- | Update hash of a file.
 updateHash :: SqlConn -- ^ DB connection.
@@ -329,6 +330,6 @@ getUnhashed (SqlConnT _ f) =
                             (\r -> do C.yield (toFile r)
                                       source)
 
-    in do liftIO $ void (execute st [])
+    in do liftIO $! void (execute st [])
           source
 
