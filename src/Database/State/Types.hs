@@ -5,4 +5,4 @@ module Database.State.Types
 data Function = Insert
               | LastState
               | MaxId
-              deriving (Eq, Ord)
+              deriving (Eq, Ord, Show)

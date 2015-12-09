@@ -22,4 +22,4 @@ data Function = InsertFile
               | UpdateHash
 
               | GetUnhashed
-              deriving (Eq, Ord)
+              deriving (Eq, Ord, Show)
