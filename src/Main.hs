@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings          #-}
 module Main where
 
---import System.IO (stdout, hFlush)
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy (fromStrict)
 
@@ -10,14 +9,21 @@ import Data.Conduit
 import Data.LargeWord (Word128)
 import Data.Binary (decode)
 
+import System.Environment (getArgs)
+
+import Control.Monad (liftM)
 import Control.Monad.Trans.Resource
 import Control.Concurrent.MVar
 
 import qualified Crypto.Hash.MD5 as C
 
 import qualified Database as DB
-import qualified Database.State as DB.State
+import Database.Types (SqlConn)
+--import qualified Database.State as DB.State
 import qualified Database.FileCache as DB.FileCache
+
+import qualified FileSystem as FS
+import Types.File (File)
 
 -- |Hash sink.
 hashConduit :: MonadResource m
@@ -36,13 +42,20 @@ hashConduit = h C.init
 closeSignal :: MVar () -> IO ()
 closeSignal v = putMVar v ()
 
+makeTestDB :: SqlConn
+           -> FilePath
+           -> IO ()
+makeTestDB c f = do
+    FS.getAllFiles f >>= mapM_ (DB.FileCache.insertFile c)
+    DB.commit c
+
 main :: IO ()
-main = do c <- DB.connect "fisk.sql"
+main = do
+    c <- DB.connect "fisk.sql"
 
-          i <- DB.FileCache.lastFileId' c
+    liftM head getArgs >>= makeTestDB c
 
-          print i
+    DB.disconnect c
 
-          DB.commit c
-          return ()
+    return ()
 
