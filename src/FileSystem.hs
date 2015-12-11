@@ -1,5 +1,6 @@
 module FileSystem
-( directoryContent
+( getFileStatus
+, directoryContent
 , filterFiles
 , filterDirectorys
 , getAllFiles
@@ -13,18 +14,29 @@ import           System.FilePath       (( </> ))
 import           System.Directory      (getDirectoryContents
                                        ,canonicalizePath
                                        )
-import           System.Posix.Files    (getFileStatus
-                                       ,isDirectory
+import qualified System.Posix.Files as P
+import           System.Posix.Files    (isDirectory
                                        ,FileStatus
                                        ,accessTimeHiRes
                                        ,modificationTimeHiRes
                                        ,fileSize
                                        ,isRegularFile
                                        )
+import           System.IO.Error       (isDoesNotExistError
+                                       ,catchIOError
+                                       )
 
 import           Control.Monad         (liftM)
 
 import           Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+import           Data.Maybe            (fromJust)
+
+getFileStatus :: FilePath
+              -> IO (Maybe FileStatus)
+getFileStatus fp = catchIOError (P.getFileStatus fp >>= return . Just)
+                                (\e -> if isDoesNotExistError e
+                                           then return Nothing
+                                           else ioError e)
 
 -- |Strict directory and status fetcher. Returns empty if no content or not a
 -- directory.
@@ -37,11 +49,11 @@ directoryContent fp = do
         filterDots ".." = False
         filterDots _ = True
 
-    is <- liftM isDirectory (getFileStatus fp)
+    is <- liftM (maybe False isDirectory) (getFileStatus fp)
     if is
         then (do cont <- liftM (map (fp </>) . filter filterDots)
                                (getDirectoryContents fp)
-                 stat <- mapM getFileStatus cont
+                 stat <- mapM (liftM fromJust . getFileStatus) cont
                  return $! zip cont stat)
         else return []
 
@@ -85,3 +97,4 @@ getAllFiles fp =
                      >>= directoryContent
           let (f, d) = split content
           get' f d
+
