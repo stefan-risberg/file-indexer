@@ -9,9 +9,12 @@ import Data.Conduit
 import Data.LargeWord (Word128)
 import Data.Binary (decode)
 
-import System.Environment (getArgs)
+--import System.Environment (getArgs)
+import System.FilePath ((</>))
 
-import Control.Monad (liftM)
+import Control.Monad (liftM
+                     ,unless
+                     )
 import Control.Monad.Trans.Resource
 import Control.Concurrent.MVar
 
@@ -23,7 +26,7 @@ import Database.Types (SqlConn)
 import qualified Database.FileCache as DB.FileCache
 
 import qualified FileSystem as FS
-import Types.File (File)
+--import Types.File (File)
 
 -- |Hash sink.
 hashConduit :: MonadResource m
@@ -42,18 +45,24 @@ hashConduit = h C.init
 closeSignal :: MVar () -> IO ()
 closeSignal v = putMVar v ()
 
-makeTestDB :: SqlConn
-           -> FilePath
-           -> IO ()
-makeTestDB c f = do
-    FS.getAllFiles f >>= mapM_ (DB.FileCache.insertFile c)
-    DB.commit c
+testDatabase :: IO SqlConn
+testDatabase = do
+    let testLocation = "./test"
+        testDB       = testLocation </> "database.test.sql"
+        testFiles    = testLocation </> "files"
+
+    ex <- liftM (maybe False (\_ -> True)) (FS.getFileStatus testDB)
+
+    c <- DB.connect $ testDB
+
+    unless ex (FS.getAllFiles testFiles
+                   >>= mapM_ (DB.FileCache.insertFile' c)
+                   >>  DB.commit c)
+    return c
 
 main :: IO ()
 main = do
-    c <- DB.connect "fisk.sql"
-
-    liftM head getArgs >>= makeTestDB c
+    c <- testDatabase
 
     DB.disconnect c
 
