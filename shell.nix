@@ -17,6 +17,7 @@ let
       , largeword
       , HDBC
       , HDBC-sqlite3
+      , lens
 
       , stdenv }:
       mkDerivation {
@@ -38,6 +39,7 @@ let
             largeword
             HDBC
             HDBC-sqlite3
+            lens
         ];
         license = stdenv.lib.licenses.bsd2;
       };

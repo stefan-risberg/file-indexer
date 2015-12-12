@@ -62,14 +62,14 @@ filterFiles :: [(FilePath, FileStatus)] -- ^ List to filter.
             -> [File] -- ^ List of all files.
 filterFiles = let aT = posixSecondsToUTCTime . accessTimeHiRes
                   mT = posixSecondsToUTCTime . modificationTimeHiRes
-              in map (\(fp, fs) -> File { F.id = 0
-                                        , F.path = fp
-                                        , F.size = fromIntegral (fileSize fs)
-                                        , F.accessTime = aT fs
-                                        , F.modTime = mT fs
-                                        , F.user = P.Permission True True False
-                                        , F.group = P.Permission True True False
-                                        , F.other = P.Permission True False False
+              in map (\(fp, fs) -> File { F._id = 0
+                                        , F._path = fp
+                                        , F._size = fromIntegral (fileSize fs)
+                                        , F._accessTime = aT fs
+                                        , F._modTime = mT fs
+                                        , F._user = P.Permission True True False
+                                        , F._group = P.Permission True True False
+                                        , F._other = P.Permission True False False
                                         })
                . filter (isRegularFile . snd)
 

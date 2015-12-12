@@ -1,10 +1,16 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell       #-}
+
 module Types.Permission
 ( Permission (..)
 , wordToPermission
 , permissionToWord
+, read
+, write
+, execute
 ) where
 
+import Prelude hiding (read)
 import Data.Bits             ( testBit
                              , bit
                              , zeroBits
@@ -14,12 +20,15 @@ import Data.Word             (Word8)
 import Data.Convertible.Base
 import Database.HDBC         (SqlValue ( SqlChar))
 import Control.Monad         (liftM)
+import Control.Lens
 
-data Permission = Permission { read :: Bool
-                             , write :: Bool
-                             , execute :: Bool
+data Permission = Permission { _read :: Bool
+                             , _write :: Bool
+                             , _execute :: Bool
                              }
                 deriving (Show, Eq)
+
+makeLenses ''Permission
 
 wordToPermission :: Word8
                  -> Permission

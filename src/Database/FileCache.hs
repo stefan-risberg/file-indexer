@@ -43,6 +43,8 @@ import Data.Time.Clock (UTCTime)
 
 import Control.Monad (void, liftM)
 import Control.Monad.IO.Class
+import Control.Lens
+
 import Numeric
 import Types.File
 import Prelude hiding (id)
@@ -144,16 +146,16 @@ insertFile :: SqlConn -- ^ DB connection.
            -> IO ()
 insertFile c file =
     let ins = DB.st c ! SqlFileCashe InsertFile
-        (d, f) = splitFileName (F.path file)
-        param     = [ toSql $ F.id file
+        (d, f) = splitFileName (view F.path file)
+        param     = [ toSql $ view F.id file
                     , toSql f
                     , toSql d
-                    , toSql $ F.size file
-                    , toSql $ F.accessTime file
-                    , toSql $ F.modTime file
-                    , toSql $ F.user file
-                    , toSql $ F.group file
-                    , toSql $ F.other file
+                    , toSql $ view F.size file
+                    , toSql $ view F.accessTime file
+                    , toSql $ view F.modTime file
+                    , toSql $ view F.user file
+                    , toSql $ view F.group file
+                    , toSql $ view F.other file
                     ]
     in void $! execute ins param
 
@@ -163,7 +165,7 @@ insertFile' :: SqlConn -- ^ DB connection.
             -> IO File -- ^ File with update id field.
 insertFile' c file =
     liftM (+1) (lastFileId' c)
-    >>= \i -> insertFile c (file { id = i }) >> (return $! file { id = i })
+    >>= \i -> insertFile c (set F.id i file) >> (return $! set F.id i file)
 
 -- | Remove file.
 removeFile :: SqlConn -- ^ DB connection.
@@ -199,7 +201,7 @@ fileExists :: SqlConn -- ^ DB connection.
            -> IO Bool
 fileExists c f =
     let st = DB.st c ! SqlFileCashe FileExists
-        (d', f') = splitFileName (F.path f)
+        (d', f') = splitFileName (view F.path f)
         param = [ toSql d', toSql f' ]
         conv r = (fromSql $ r ! "COUNT(f.id)" :: Int) > 0
     in execute st param >> fetchRowMap st
@@ -314,14 +316,14 @@ getUnhashed (SqlConnT _ f) =
                -> File
         toFile m = let file = fromSql $ m ! "name"
                        dir  = fromSql $ m ! "location"
-                   in File { id         = fromSql $ m ! "id"
-                           , path       = dir </> file
-                           , size       = fromSql $ m ! "size"
-                           , accessTime = fromSql $ m ! "access_time"
-                           , modTime    = fromSql $ m ! "mod_time"
-                           , user       = fromSql $ m ! "user_per"
-                           , group      = fromSql $ m ! "group_per"
-                           , other      = fromSql $ m ! "other_per"
+                   in File { _id         = fromSql $ m ! "id"
+                           , _path       = dir </> file
+                           , _size       = fromSql $ m ! "size"
+                           , _accessTime = fromSql $ m ! "access_time"
+                           , _modTime    = fromSql $ m ! "mod_time"
+                           , _user       = fromSql $ m ! "user_per"
+                           , _group      = fromSql $ m ! "group_per"
+                           , _other      = fromSql $ m ! "other_per"
                            }
 
         st = f ! SqlFileCashe GetUnhashed
