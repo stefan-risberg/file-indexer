@@ -137,24 +137,26 @@ sql = [ ( InsertFile
 create :: Connection
        -> IO ()
 create c = do
-    void $ run c "CREATE TABLE IF NOT EXISTS files \n\
-                 \ ( id INTEGER \n\
-                 \ , name TEXT NOT NULL \n\
-                 \ , location TEXT NOT NULL \n\
-                 \ , size TEXT NOT NULL \n\
-                 \ , access_time TEXT NOT NULL \n\
-                 \ , mod_time TEXT NOT NULL \n\
-                 \ , user_per INTEGER NOT NULL \n\
-                 \ , group_per INTEGER NOT NULL \n\
-                 \ , other_per INTEGER NOT NULL \n\
-                 \ , PRIMARY KEY (id)\n\
-                 \ );" []
-    void $ run c "CREATE TABLE IF NOT EXISTS hashes \n\
-                 \     ( file_id INTEGER \n\
-                 \     , hash TEXT NOT NULL \n\
-                 \     , PRIMARY KEY (file_id) \n\
-                 \     , FOREIGN KEY (file_id) REFERENCES files(id) \n\
-                 \     );" []
+    void $ run c
+         (concat $ "CREATE TABLE IF NOT EXISTS files":
+                   " ( id INTEGER":
+                   " , name TEXT NOT NULL":
+                   " , location TEXT NOT NULL":
+                   " , size TEXT NOT NULL":
+                   " , access_time TEXT NOT NULL":
+                   " , mod_time TEXT NOT NULL":
+                   " , user_per INTEGER NOT NULL":
+                   " , group_per INTEGER NOT NULL":
+                   " , other_per INTEGER NOT NULL":
+                   " , PRIMARY KEY (id)":
+                   " );":[]) []
+    void $ run c
+         (concat $ "CREATE TABLE IF NOT EXISTS hashes":
+                   "     ( file_id INTEGER":
+                   "     , hash TEXT NOT NULL":
+                   "     , PRIMARY KEY (file_id)":
+                   "     , FOREIGN KEY (file_id) REFERENCES files(id)":
+                   "     );": []) []
 
 -- | Add a file that has an id already.
 insertFile :: SqlConn -- ^ DB connection.
