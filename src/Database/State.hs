@@ -14,13 +14,14 @@ import Database.HDBC.Sqlite3 (Connection)
 import Data.Text (Text)
 import Data.Map.Strict ((!))
 import Control.Monad (void)
+import Control.Lens
 
 sql :: [(Function, String)]
-sql = [(Insert, "INSERT INTO state_history (id, state) \n\
-                \VALUES (?, ?);")
-      ,(LastState, "SELECT state FROM state_history \n\
-                   \WHERE id = (SELECT MAX(id) FROM state_history);")
-      ,(MaxId, "SELECT MAX(id) FROM state_history;")
+sql = [ (Insert, "INSERT INTO state_history (id, state) \n\
+                  \VALUES (?, ?);")
+      , (LastState, "SELECT state FROM state_history \n\
+                     \WHERE id = (SELECT MAX(id) FROM state_history);")
+      , (MaxId, "SELECT MAX(id) FROM state_history;")
       ]
 
 create :: Connection
@@ -36,13 +37,13 @@ insert :: Text
        -> SqlConn
        -> IO Int
 insert t c =
-    let ins     = st c ! SqlState Insert
-        m       = st c ! SqlState MaxId
+    let ins     = (c ^. st) ! SqlState Insert
+        m       = (c ^. st) ! SqlState MaxId
         param i = [toSql i, toSql t]
     in C.nextId m >>= \id_ -> execute ins (param id_) >> return id_
 
 lastState :: SqlConn
           -> IO (Maybe Text)
 lastState c =
-    let l = st c ! SqlState LastState
+    let l = (c ^. st) ! SqlState LastState
     in void (execute l []) >> C.readHead l

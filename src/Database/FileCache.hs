@@ -30,7 +30,7 @@ module Database.FileCache
 ) where
 
 import Database.FileCache.Types
-import Database.Types hiding (SqlConnT (conn, st))
+import Database.Types hiding (conn, st)
 import qualified Database.Types as DB
 import Database.HDBC
 import Database.HDBC.Sqlite3 (Connection)
@@ -163,7 +163,7 @@ insertFile :: SqlConn -- ^ DB connection.
            -> File -- ^ File to insert.
            -> IO ()
 insertFile c file =
-    let ins = DB.st c ! SqlFileCashe InsertFile
+    let ins = (c ^. DB.st) ! SqlFileCashe InsertFile
         (d, f) = splitFileName (view F.path file)
         param     = [ toSql $ view F.id file
                     , toSql f
@@ -190,7 +190,7 @@ removeFile :: SqlConn -- ^ DB connection.
            -> Int     -- ^ Id of file to remove.
            -> IO ()
 removeFile c i =
-    let st = DB.st c ! SqlFileCashe RemoveFile
+    let st = (c ^. DB.st)  ! SqlFileCashe RemoveFile
         sI = toSql i
         param = [ sI, sI ]
     in void $! execute st param
@@ -199,7 +199,7 @@ removeFile c i =
 lastFileId :: SqlConn        -- ^ DB connection.
            -> IO (Maybe Int) -- ^ Last id.
 lastFileId c =
-    let st = DB.st c ! SqlFileCashe LastFileId
+    let st = (c ^. DB.st)  ! SqlFileCashe LastFileId
         conv r = let r' = r ! "MAX(id)"
                  in case r' of
                         SqlNull -> Nothing
@@ -218,7 +218,7 @@ fileExists :: SqlConn -- ^ DB connection.
            -> File -- ^ File.
            -> IO Bool
 fileExists c f =
-    let st = DB.st c ! SqlFileCashe FileExists
+    let st = (c ^. DB.st)  ! SqlFileCashe FileExists
         (d', f') = splitFileName (view F.path f)
         param = [ toSql d', toSql f' ]
         conv r = (fromSql $ r ! "COUNT(f.id)" :: Int) > 0
