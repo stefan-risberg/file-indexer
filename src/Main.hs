@@ -9,7 +9,6 @@ import Data.Conduit
 import Data.LargeWord (Word128)
 import Data.Binary (decode)
 
---import System.Environment (getArgs)
 import System.FilePath ((</>))
 
 import Control.Monad (liftM
@@ -26,7 +25,6 @@ import Database.Types (SqlConn)
 import qualified Database.FileCache as DB.FileCache
 
 import qualified FileSystem as FS
---import Types.File (File)
 
 -- |Hash sink.
 hashConduit :: MonadResource m
