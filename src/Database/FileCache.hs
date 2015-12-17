@@ -57,65 +57,81 @@ import qualified Data.Conduit as C
 import Data.Int (Int64)
 
 sql :: [(Function, String)]
-sql = [ (InsertFile, "INSERT INTO files (id, name, location, size, access_time, mod_time, user_per, group_per, other_per) \n\
-                     \VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);")
-      , (RemoveFile, " DELETE FROM files \n\
-                     \  WHERE id=?; \n\
-                     \ DELETE FROM hashes \n\
-                     \  WHERE file_id=?;")
-      , (LastFileId, "SELECT MAX(id) FROM files;")
+sql = [ ( InsertFile
+        , unwords $ "INSERT INTO files (id, name, location, size, access_time, mod_time, user_per, group_per, other_per)":
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);": [])
+      , ( RemoveFile
+        , unwords $ " DELETE FROM files":
+                    "  WHERE id=?;":
+                    " DELETE FROM hashes":
+                    "  WHERE file_id=?;": [])
+      , ( LastFileId
+        , unwords $ "SELECT MAX(id) FROM files;":[])
 
-      , (FileExists, "SELECT COUNT(f.id) \n\
-                     \  FROM files AS f \n\
-                     \ WHERE f.location = ? \n\
-                     \   AND f.name = ?;")
+      , ( FileExists
+        , unwords $ "SELECT COUNT(f.id)":
+                    "  FROM files AS f":
+                    " WHERE f.location = ?":
+                    "   AND f.name = ?;":[])
 
-      , (UpdateName, "UPDATE files \n\
-                     \   SET name=? \n\
-                     \ WHERE id=?;")
-      , (UpdateLocation, "UPDATE files \n\
-                         \   SET location=? \n\
-                         \ WHERE id=?;")
-      , (UpdateSize, "UPDATE files \n\
-                     \   SET size=? \n\
-                     \ WHERE id=?;")
-      , (UpdateAccessTime, "UPDATE files \n\
-                           \   SET access_time=? \n\
-                           \ WHERE id=?;")
-      , (UpdateModTime, "UPDATE files \n\
-                        \   SET mod_time=? \n\
-                        \ WHERE id=?;")
-      , (UpdateUser, "UPDATE files \n\
-                     \   SET user_per=? \n\
-                     \ WHERE id=?;")
-      , (UpdateGroup, "UPDATE files \n\
-                      \   SET group_per=? \n\
-                      \ WHERE id=?;")
-      , (UpdateOther, "UPDATE files \n\
-                      \   SET other_per=? \n\
-                      \ WHERE id=?;")
+      , ( UpdateName
+        , unwords $ "UPDATE files":
+                    "   SET name=?":
+                    " WHERE id=?;":[])
+      , ( UpdateLocation
+        , unwords $ "UPDATE files":
+                    "   SET location=?":
+                    " WHERE id=?;":[])
+      , ( UpdateSize
+        , unwords $ "UPDATE files":
+                    "   SET size=?":
+                    " WHERE id=?;":[])
+      , ( UpdateAccessTime
+        , unwords $ "UPDATE files":
+                    "   SET access_time=?":
+                    " WHERE id=?;":[])
+      , ( UpdateModTime
+        , unwords $ "UPDATE files":
+                    "   SET mod_time=?":
+                    " WHERE id=?;":[])
+      , ( UpdateUser
+        , unwords $ "UPDATE files":
+                    "   SET user_per=?":
+                    " WHERE id=?;":[])
+      , ( UpdateGroup
+        , unwords $ "UPDATE files":
+                    "   SET group_per=?":
+                    " WHERE id=?;":[])
+      , ( UpdateOther
+        , unwords $ "UPDATE files":
+                    "   SET other_per=?":
+                    " WHERE id=?;":[])
 
-      , (InsertHash, "INSERT INTO hashes (file_id, hash) \n\
-                     \SELECT f.id, ? \n\
-                     \  FROM files AS f \n\
-                     \ WHERE f.id=?;")
-      , (RemoveHash, "DELETE FROM hashes \n\
-                     \ WHERE file_id=?;")
-      , (UpdateHash, "UPDATE hashes \n\
-                     \   SET hash=? \n\
-                     \ WHERE file_id=?;")
-      , (GetUnhashed, "SELECT f.id \n\
-                      \      ,f.name \n\
-                      \      ,f.location \n\
-                      \      ,f.size \n\
-                      \      ,f.access_time \n\
-                      \      ,f.mod_time \n\
-                      \      ,f.user_per \n\
-                      \      ,f.group_per \n\
-                      \      ,f.other_per \n\
-                      \  FROM files AS f \n\
-                      \ WHERE f.id NOT IN (SELECT h.file_id \n\
-                      \                    FROM hashes AS h);")
+      , ( InsertHash
+        , unwords $ "INSERT INTO hashes (file_id, hash:[])":
+                    "SELECT f.id, ?":
+                    "  FROM files AS f":
+                    " WHERE f.id=?;":[])
+      , ( RemoveHash
+        , unwords $ "DELETE FROM hashes":
+                    " WHERE file_id=?;":[])
+      , ( UpdateHash
+        , unwords $ "UPDATE hashes":
+                    "   SET hash=?":
+                    " WHERE file_id=?;":[])
+      , ( GetUnhashed
+        , unwords $ "SELECT f.id":
+                    "      ,f.name":
+                    "      ,f.location":
+                    "      ,f.size":
+                    "      ,f.access_time":
+                    "      ,f.mod_time":
+                    "      ,f.user_per":
+                    "      ,f.group_per":
+                    "      ,f.other_per":
+                    "  FROM files AS f":
+                    " WHERE f.id NOT IN (SELECT h.file_id":
+                    "                    FROM hashes AS h);":[])
       ]
 
 create :: Connection
