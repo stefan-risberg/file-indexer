@@ -14,6 +14,7 @@ import Database.Types
 import Data.Map.Strict hiding (map, foldr)
 
 import Control.Monad (liftM)
+import Control.Lens
 
 -- | Connect to database
 connect :: FilePath   -- ^ Location of database
@@ -43,9 +44,9 @@ connect loc = do c <- connectSqlite3 loc
 -- | Disconnect from the database.
 disconnect :: SqlConn -- ^ DB connection.
            -> IO ()
-disconnect c = DB.disconnect $ conn c
+disconnect c = DB.disconnect (c ^. conn)
 
 -- | Commit changes to the database.
 commit :: SqlConn -- ^ DB connection.
        -> IO ()
-commit c = DB.commit $ conn c
+commit c = DB.commit (c ^. conn)
