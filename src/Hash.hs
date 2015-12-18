@@ -2,7 +2,10 @@ module Hash
 ( hash
 ) where
 
-import           Data.Conduit
+import           Data.Conduit ( Sink
+                              , await
+                              , ($$))
+
 import           Data.Conduit.Binary (sourceFile)
 import           Data.LargeWord (Word128)
 import           Data.ByteString (ByteString)
