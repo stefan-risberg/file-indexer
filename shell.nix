@@ -18,7 +18,6 @@ let
       , HDBC
       , HDBC-sqlite3
       , lens
-
       , stdenv }:
       mkDerivation {
         pname = "test";

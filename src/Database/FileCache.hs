@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes       #-}
 module Database.FileCache
 ( sql
 , create

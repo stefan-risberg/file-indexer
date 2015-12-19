@@ -18,6 +18,7 @@ cabal-version:       >=1.10
 
 executable file-indexer
   main-is:             Main.hs
+  ghc-options:      -threaded
   -- other-modules:
   other-extensions:    OverloadedStrings, FlexibleContexts, RankNTypes, MultiParamTypeClasses
   build-depends:       base >=4.8 && <4.9
@@ -30,6 +31,7 @@ executable file-indexer
                      , bytestring
                      , conduit
                      , conduit-combinators
+                     , conduit-extra
                      , largeword
                      , binary
                      , time
