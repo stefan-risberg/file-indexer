@@ -62,7 +62,7 @@ filterFiles :: [(FilePath, FileStatus)] -- ^ List to filter.
             -> [File] -- ^ List of all files.
 filterFiles = let aT = posixSecondsToUTCTime . accessTimeHiRes
                   mT = posixSecondsToUTCTime . modificationTimeHiRes
-              in map (\(fp, fs) -> File { F._id = 0
+              in map (\(fp, fs) -> File { F._id = Nothing
                                         , F._path = fp
                                         , F._size = fromIntegral (fileSize fs)
                                         , F._accessTime = aT fs
