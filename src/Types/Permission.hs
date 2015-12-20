@@ -17,9 +17,6 @@ import Data.Bits             ( testBit
                              , (.|.)
                              )
 import Data.Word             (Word8)
-import Data.Convertible.Base
-import Database.HDBC         (SqlValue ( SqlChar))
-import Control.Monad         (liftM)
 import Control.Lens
 
 data Permission = Permission { _read :: Bool
@@ -46,11 +43,3 @@ permissionToWord (Permission r w x) =
         x' = if x then bit 2 else zeroBits
     in r' .|. w' .|. x'
 
-instance Convertible Permission SqlValue where
-    safeConvert = liftM SqlChar
-                . safeConvert
-                . permissionToWord
-
-instance Convertible SqlValue Permission where
-    safeConvert (SqlChar c) = return . wordToPermission $ convert c
-    safeConvert _ = Left (ConvertError "" "" "" "")
