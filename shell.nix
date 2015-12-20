@@ -12,11 +12,16 @@ let
       , conduit
       , conduit-extra
       , conduit-combinators
+      , convertible
       , bytestring
       , cryptohash
       , largeword
-      , HDBC
-      , HDBC-sqlite3
+
+      , persistent
+      , persistent-template
+      , persistent-sqlite
+      , esqueleto
+
       , lens
       , stdenv }:
       mkDerivation {
@@ -33,11 +38,16 @@ let
             conduit
             conduit-extra
             conduit-combinators
+            convertible
             bytestring
             cryptohash
             largeword
-            HDBC
-            HDBC-sqlite3
+
+            persistent
+            persistent-template
+            persistent-sqlite
+            esqueleto
+
             lens
         ];
         license = stdenv.lib.licenses.bsd2;
