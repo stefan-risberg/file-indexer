@@ -1,52 +1,43 @@
-module Database
-( connect
-, disconnect
-, commit
-) where
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-import Database.HDBC hiding (disconnect, commit)
-import qualified Database.HDBC as DB
-import Database.HDBC.Sqlite3
-import qualified Database.State as State
-import qualified Database.FileCache as FileCache
-import Database.Types
+module Database where
 
-import Data.Map.Strict hiding (map, foldr)
+import Database.Persist.TH
+import Data.Text (Text)
+import Data.Word (Word8, Word64)
+import Data.ByteString (ByteString)
+import Data.Time.Clock (UTCTime)
 
-import Control.Monad (liftM)
-import Control.Lens
 
--- | Connect to database
-connect :: FilePath   -- ^ Location of database
-        -> IO SqlConn -- ^ Connection.
-connect loc = do c <- connectSqlite3 loc
-                 mapM_ (\f -> f c) [ State.create
-                                   , FileCache.create
-                                   ]
-                 stateFunc <- connect' c SqlState State.sql
-                 fileCacheFunc <- connect' c SqlFileCashe FileCache.sql
+share [mkPersist sqlSettings, mkMigrate "fileIndex"] [persistLowerCase|
+File
+    name       Text
+    location   Text
+    size       Word64
+    accessTime UTCTime
+    modTime    UTCTime
+    userPer    Word8
+    groupPer   Word8
+    otherPer   Word8
+    UniquePath location name
+    deriving   Show
 
-                 return $ SqlConnT c
-                        $ fromList
-                        $ concat [ stateFunc
-                                 , fileCacheFunc
-                                 ]
-              where
-                connect' :: Connection
-                         -> (a -> SqlFunc)
-                         -> [(a, String)]
-                         -> IO [(SqlFunc, Statement)]
-                connect' c t =
-                    let prep = prepare c
-                        m (f, q) = liftM (\st' -> (t f, st')) (prep q)
-                    in mapM m
+Hash
+    file     FileId
+    hash     Text
+    deriving Show
 
--- | Disconnect from the database.
-disconnect :: SqlConn -- ^ DB connection.
-           -> IO ()
-disconnect c = DB.disconnect (c ^. conn)
+Job
+    file FileId
+    at   Word64
+    ctx  ByteString
+    done Bool default=True
+    deriving Show
+|]
 
--- | Commit changes to the database.
-commit :: SqlConn -- ^ DB connection.
-       -> IO ()
-commit c = DB.commit (c ^. conn)

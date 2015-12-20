@@ -1,14 +1,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes       #-}
-module Database.FileCache
-( sql
-, create
+{-# LANGUAGE ScopedTypeVariables       #-}
 
-, insertFile
-, insertFile'
+module Database.FileCache
+( insertFile
 , removeFile
-, lastFileId
-, lastFileId'
 
 , fileExists
 
@@ -26,333 +22,202 @@ module Database.FileCache
 
 , updateHash
 , updateHash'
-, getUnhashed
+--, getUnhashed
 ) where
 
-import Database.FileCache.Types
-import Database.Types hiding (conn, st)
-import qualified Database.Types as DB
-import Database.HDBC
-import Database.HDBC.Sqlite3 (Connection)
-import Data.Map.Strict ((!), Map)
-import Data.Maybe (fromMaybe)
-import Data.LargeWord (Word128)
-import Data.Convertible.Base
-import Data.Text (Text, pack)
-import Data.Time.Clock (UTCTime)
+import Database
+import Database.Esqueleto
 
-import Control.Monad (void, liftM)
-import Control.Monad.IO.Class
-import Control.Lens
-
-import Numeric
-import Types.File
-import Prelude hiding (id)
-import qualified Types.File as F
-import qualified Types.Permission as P
-
-import System.FilePath (splitFileName, (</>))
-
-import qualified Data.Conduit as C
+import Data.Text (pack, Text)
 import Data.Int (Int64)
+import Data.Word (Word64)
+import Data.Time (UTCTime)
+import Data.LargeWord (Word128)
 
-sql :: [(Function, String)]
-sql = [ ( InsertFile
-        , unwords $ "INSERT INTO files (id, name, location, size, access_time, mod_time, user_per, group_per, other_per)":
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);": [])
-      , ( RemoveFile
-        , unwords $ " DELETE FROM files":
-                    "  WHERE id=?;":
-                    " DELETE FROM hashes":
-                    "  WHERE file_id=?;": [])
-      , ( LastFileId
-        , unwords $ "SELECT MAX(id) FROM files;":[])
+import qualified Types.File as F
+import Types.Permission (permissionToWord, Permission)
 
-      , ( FileExists
-        , unwords $ "SELECT COUNT(f.id)":
-                    "  FROM files AS f":
-                    " WHERE f.location = ?":
-                    "   AND f.name = ?;":[])
+import System.FilePath (takeFileName, dropFileName)
 
-      , ( UpdateName
-        , unwords $ "UPDATE files":
-                    "   SET name=?":
-                    " WHERE id=?;":[])
-      , ( UpdateLocation
-        , unwords $ "UPDATE files":
-                    "   SET location=?":
-                    " WHERE id=?;":[])
-      , ( UpdateSize
-        , unwords $ "UPDATE files":
-                    "   SET size=?":
-                    " WHERE id=?;":[])
-      , ( UpdateAccessTime
-        , unwords $ "UPDATE files":
-                    "   SET access_time=?":
-                    " WHERE id=?;":[])
-      , ( UpdateModTime
-        , unwords $ "UPDATE files":
-                    "   SET mod_time=?":
-                    " WHERE id=?;":[])
-      , ( UpdateUser
-        , unwords $ "UPDATE files":
-                    "   SET user_per=?":
-                    " WHERE id=?;":[])
-      , ( UpdateGroup
-        , unwords $ "UPDATE files":
-                    "   SET group_per=?":
-                    " WHERE id=?;":[])
-      , ( UpdateOther
-        , unwords $ "UPDATE files":
-                    "   SET other_per=?":
-                    " WHERE id=?;":[])
+import qualified Control.Lens as L
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad (void)
+import Control.Monad.Reader (ReaderT)
 
-      , ( InsertHash
-        , unwords $ "INSERT INTO hashes (file_id, hash:[])":
-                    "SELECT f.id, ?":
-                    "  FROM files AS f":
-                    " WHERE f.id=?;":[])
-      , ( RemoveHash
-        , unwords $ "DELETE FROM hashes":
-                    " WHERE file_id=?;":[])
-      , ( UpdateHash
-        , unwords $ "UPDATE hashes":
-                    "   SET hash=?":
-                    " WHERE file_id=?;":[])
-      , ( GetUnhashed
-        , unwords $ "SELECT f.id":
-                    "      ,f.name":
-                    "      ,f.location":
-                    "      ,f.size":
-                    "      ,f.access_time":
-                    "      ,f.mod_time":
-                    "      ,f.user_per":
-                    "      ,f.group_per":
-                    "      ,f.other_per":
-                    "  FROM files AS f":
-                    " WHERE f.id NOT IN (SELECT h.file_id":
-                    "                    FROM hashes AS h);":[])
-      ]
+import Numeric (showHex)
 
-create :: Connection
-       -> IO ()
-create c = do
-    void $ run c
-         (concat $ "CREATE TABLE IF NOT EXISTS files":
-                   " ( id INTEGER":
-                   " , name TEXT NOT NULL":
-                   " , location TEXT NOT NULL":
-                   " , size TEXT NOT NULL":
-                   " , access_time TEXT NOT NULL":
-                   " , mod_time TEXT NOT NULL":
-                   " , user_per INTEGER NOT NULL":
-                   " , group_per INTEGER NOT NULL":
-                   " , other_per INTEGER NOT NULL":
-                   " , PRIMARY KEY (id)":
-                   " );":[]) []
-    void $ run c
-         (concat $ "CREATE TABLE IF NOT EXISTS hashes":
-                   "     ( file_id INTEGER":
-                   "     , hash TEXT NOT NULL":
-                   "     , PRIMARY KEY (file_id)":
-                   "     , FOREIGN KEY (file_id) REFERENCES files(id)":
-                   "     );": []) []
+-- | Add a file. If id is Nothing it is set to new given id.
+--   If it is Just i the id on the database will be set to i.
+insertFile :: MonadIO m
+           => F.File                      -- ^ File to add
+           -> ReaderT SqlBackend m F.File -- ^ File returned with the id set.
+insertFile file =
+    let f = File (pack $! takeFileName $ L.view F.path file)
+                 (pack $! dropFileName $ L.view F.path file)
+                 (L.view F.size file)
+                 (L.view F.accessTime file)
+                 (L.view F.modTime file)
+                 (permissionToWord $ L.view F.user file)
+                 (permissionToWord $ L.view F.group file)
+                 (permissionToWord $ L.view F.other file)
 
--- | Add a file that has an id already.
-insertFile :: SqlConn -- ^ DB connection.
-           -> File -- ^ File to insert.
-           -> IO ()
-insertFile c file =
-    let ins = (c ^. DB.st) ! SqlFileCashe InsertFile
-        (d, f) = splitFileName (view F.path file)
-        param     = [ toSql $ view F.id file
-                    , toSql f
-                    , toSql d
-                    , toSql $ view F.size file
-                    , toSql $ view F.accessTime file
-                    , toSql $ view F.modTime file
-                    , toSql $ view F.user file
-                    , toSql $ view F.group file
-                    , toSql $ view F.other file
-                    ]
-    in void $! execute ins param
+    in maybe (insert f >>= \k -> return $! L.set F.id (Just (fromSqlKey k)) file)
+             (\i -> insertKey (toSqlKey i)
+                              f
+                        >> return file)
+             (L.view F.id file)
 
--- | Add new file.
-insertFile' :: SqlConn -- ^ DB connection.
-            -> File    -- ^ File to insert.
-            -> IO File -- ^ File with update id field.
-insertFile' c file =
-    liftM (+1) (lastFileId' c)
-    >>= \i -> insertFile c (set F.id i file) >> (return $! set F.id i file)
+-- | Removes a file.
+removeFile :: MonadIO m
+           => F.File -- ^ File to remove.
+           -> ReaderT SqlBackend m ()
+removeFile file = maybe (return ())
+                        (\i -> delete $
+                               from $ \f ->
+                               where_ (f ^. FileId ==. val (toSqlKey i :: Key File)))
+                        (L.view F.id file)
 
--- | Remove file.
-removeFile :: SqlConn -- ^ DB connection.
-           -> Int     -- ^ Id of file to remove.
-           -> IO ()
-removeFile c i =
-    let st = (c ^. DB.st)  ! SqlFileCashe RemoveFile
-        sI = toSql i
-        param = [ sI, sI ]
-    in void $! execute st param
+-- | Check for file existance.
+fileExists :: MonadIO m
+           => F.File -- ^ File to check if it exists.
+           -> ReaderT SqlBackend m Bool
+fileExists file =
+    select (from $ \n -> do
+                let a = count (n ^. FileId)
+                    name = pack . takeFileName $ L.view F.path file
+                    loc = pack . dropFileName $ L.view F.path file
 
--- | Get last file id. If Nothing the file table is empty.
-lastFileId :: SqlConn        -- ^ DB connection.
-           -> IO (Maybe Int) -- ^ Last id.
-lastFileId c =
-    let st = (c ^. DB.st)  ! SqlFileCashe LastFileId
-        conv r = let r' = r ! "MAX(id)"
-                 in case r' of
-                        SqlNull -> Nothing
-                        a -> Just $! fromSql a
-    in execute st [] >> fetchRowMap st
-       >>= \i -> return $! maybe Nothing conv i
+                where_ (n ^. FileName ==. val name &&. n ^. FileLocation ==. val loc)
+                return a)
+         >>= \c -> return $! 0 < ((unValue $ head c) :: Int)
 
--- | Get last file id. Same as 'lastFileId' except it gives 0 if
--- table is empty.
-lastFileId' :: SqlConn -- ^ DB connection.
-            -> IO Int  -- ^ Last id.
-lastFileId' c = lastFileId c
-                >>= \i -> return $! fromMaybe 0 i
+updateField :: (MonadIO m, PersistField typ)
+            => EntityField File typ
+            -> Int64
+            -> typ
+            -> SqlPersistT m ()
+updateField f i d =
+    update $ \n -> do
+        set n [ f =. val d ]
+        where_ (n ^. FileId ==. val (toSqlKey i))
 
-fileExists :: SqlConn -- ^ DB connection.
-           -> File -- ^ File.
-           -> IO Bool
-fileExists c f =
-    let st = (c ^. DB.st)  ! SqlFileCashe FileExists
-        (d', f') = splitFileName (view F.path f)
-        param = [ toSql d', toSql f' ]
-        conv r = (fromSql $ r ! "COUNT(f.id)" :: Int) > 0
-    in execute st param >> fetchRowMap st
-       >>= \e -> return $! maybe False conv e
-
--- | Generic single field updater.
-updateField :: forall a. (Convertible a SqlValue)
-            => Statement -- ^ Update statement on column to update
-            -> Int       -- ^ Id of file to update
-            -> a         -- ^ New column data.
-            -> IO ()
-updateField st i n =
-    let param = [ toSql n , toSql i ]
-    in void $! execute st param
 
 -- | Update name of file.
-updateName :: SqlConn -- ^ DB connection.
-           -> Int     -- ^ File id.
-           -> Text    -- ^ New name.
-           -> IO ()
-updateName (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateName)
+updateName :: MonadIO m
+           => Int64    -- ^ File id
+           -> FilePath -- ^ New Name
+           -> ReaderT SqlBackend m ()
+updateName i n = updateField FileName i (pack n)
 
 -- | Update location of file.
-updateLocation :: SqlConn  -- ^ DB connection.
-               -> Int      -- ^ File id.
+updateLocation :: MonadIO m
+               => Int64    -- ^ File id.
                -> FilePath -- ^ New location.
-               -> IO ()
-updateLocation (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateLocation)
+               -> ReaderT SqlBackend m ()
+updateLocation i fp = updateField FileLocation i (pack fp)
 
 -- | Update size of file.
-updateSize :: SqlConn -- ^ DB connection.
-           -> Int     -- ^ File id.
-           -> Int64   -- ^ New size.
-           -> IO ()
-updateSize (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateSize)
+updateSize :: MonadIO m
+           => Int64  -- ^ File id.
+           -> Word64 -- ^ New size.
+           -> ReaderT SqlBackend m ()
+updateSize = updateField FileSize
 
 -- | Update access time of tile.
-updateAccessTime :: SqlConn -- ^ DB connection.
-                 -> Int     -- ^ File id.
+updateAccessTime :: MonadIO m
+                 => Int64   -- ^ File id.
                  -> UTCTime -- ^ New access time.
-                 -> IO ()
-updateAccessTime (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateAccessTime)
+                 -> ReaderT SqlBackend m ()
+updateAccessTime = updateField FileAccessTime
 
 -- | Update modification time of file
-updateModTime :: SqlConn -- ^ DB connection.
-              -> Int     -- ^ File id.
+updateModTime :: MonadIO m
+              => Int64     -- ^ File id.
               -> UTCTime -- ^ New modification time.
-              -> IO ()
-updateModTime (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateModTime)
+              -> ReaderT SqlBackend m ()
+updateModTime = updateField FileModTime
 
 -- | Update user permissions of file.
-updateUser :: SqlConn      -- ^ DB connection.
-           -> Int          -- ^ File id.
-           -> P.Permission -- ^ New user permission.
-           -> IO ()
-updateUser (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateUser)
+updateUser :: MonadIO m
+           => Int64      -- ^ File id.
+           -> Permission -- ^ New user permission.
+           -> ReaderT SqlBackend m ()
+updateUser i p = updateField FileUserPer i (permissionToWord p)
 
 -- | Update group permissions of file.
-updateGroup :: SqlConn      -- ^ DB connection.
-            -> Int          -- ^ File id.
-            -> P.Permission -- ^ New group permission.
-            -> IO ()
-updateGroup (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateGroup)
+updateGroup :: MonadIO m
+            => Int64        -- ^ File id.
+            -> Permission -- ^ New group permission.
+            -> ReaderT SqlBackend m ()
+updateGroup i p = updateField FileGroupPer i (permissionToWord p)
 
 -- | Update other permissions of file.
-updateOther :: SqlConn      -- ^ DB connection.
-            -> Int          -- ^ File id.
-            -> P.Permission -- ^ New other permission.
-            -> IO ()
-updateOther (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateOther)
+updateOther :: MonadIO m
+            => Int64      -- ^ File id.
+            -> Permission -- ^ New other permission.
+            -> ReaderT SqlBackend m ()
+updateOther i p = updateField FileOtherPer i (permissionToWord p)
 
 -- | Insert a new hash for a file.
-insertHash :: SqlConn -- ^ DB connection.
-           -> Int     -- ^ File id.
+insertHash :: MonadIO m
+           => Int64   -- ^ File id.
            -> Text    -- ^ Hash.
-           -> IO ()
-insertHash (SqlConnT _ fm) i h =
-    let st = fm ! SqlFileCashe InsertHash
-        param = [ toSql h, toSql i ]
-    in void $! execute st param
+           -> ReaderT SqlBackend m ()
+insertHash i h = void $ insert $ Hash (toSqlKey i) h
 
 -- | Remove hash of a file.
-removeHash :: SqlConn -- ^ DB connection.
-           -> Int     -- ^ Id of file.
-           -> IO ()
-removeHash (SqlConnT _ fm) i =
-    let st = fm ! SqlFileCashe RemoveHash
-        param = [ toSql i ]
-    in void $! execute st param
+removeHash :: MonadIO m
+           => Int64 -- ^ Id of file.
+           -> ReaderT SqlBackend m ()
+removeHash i = delete
+             $ from
+             $ \h -> where_ (h ^. HashFile ==. val (toSqlKey i))
 
 -- | Update hash of a file.
-updateHash :: SqlConn -- ^ DB connection.
-           -> Int     -- ^ File id.
-           -> Text    -- ^ Hash as text.
-           -> IO ()
-updateHash (SqlConnT _ fm) = updateField (fm ! SqlFileCashe UpdateHash)
+updateHash :: MonadIO m
+           => Int64 -- ^ File id.
+           -> Text  -- ^ Hash as text.
+           -> ReaderT SqlBackend m ()
+updateHash i t =
+    update $ \h -> do
+        set h [ HashHash =. val t ]
+        where_ (h ^. HashFile ==. val (toSqlKey i))
 
--- | Update hash of a file. Hash is given as a Word128 but is converted to a
--- text.
-updateHash' :: SqlConn -- ^ DB connection.
-            -> Int -- ^ Id of file.
-            -> Word128 -- ^ Hash.
-            -> IO ()
-updateHash' c i w = updateHash c i (pack $ showHex w "")
+updateHash' :: MonadIO m
+            => Int64
+            -> Word128
+            -> ReaderT SqlBackend m ()
+updateHash' i w =
+    updateHash i (pack $ showHex w "")
 
--- | Create a conduit source of all unhashed values.
-getUnhashed :: MonadIO m
-            => SqlConn -- ^ DB connection.
-            -> C.Source m File
-getUnhashed (SqlConnT _ f) =
-    let toFile :: Map String SqlValue
-               -> File
-        toFile m = let file = fromSql $ m ! "name"
-                       dir  = fromSql $ m ! "location"
-                   in File { _id         = fromSql $ m ! "id"
-                           , _path       = dir </> file
-                           , _size       = fromSql $ m ! "size"
-                           , _accessTime = fromSql $ m ! "access_time"
-                           , _modTime    = fromSql $ m ! "mod_time"
-                           , _user       = fromSql $ m ! "user_per"
-                           , _group      = fromSql $ m ! "group_per"
-                           , _other      = fromSql $ m ! "other_per"
-                           }
-
-        st = f ! SqlFileCashe GetUnhashed
-
-        source :: MonadIO m
-               => C.Source m File
-        source =  liftIO (fetchRowMap st)
-                  >>= maybe (return ())
-                            (\r -> do C.yield (toFile r)
-                                      source)
-
-    in do liftIO $! void (execute st [])
-          source
-
+---- | Create a conduit source of all unhashed values.
+--getUnhashed :: MonadIO m
+--            => SqlConn -- ^ DB connection.
+--            -> C.Source m File
+--getUnhashed (SqlConnT _ f) =
+--    let toFile :: Map String SqlValue
+--               -> File
+--        toFile m = let file = fromSql $ m ! "name"
+--                       dir  = fromSql $ m ! "location"
+--                   in File { _id         = fromSql $ m ! "id"
+--                           , _path       = dir </> file
+--                           , _size       = fromSql $ m ! "size"
+--                           , _accessTime = fromSql $ m ! "access_time"
+--                           , _modTime    = fromSql $ m ! "mod_time"
+--                           , _user       = fromSql $ m ! "user_per"
+--                           , _group      = fromSql $ m ! "group_per"
+--                           , _other      = fromSql $ m ! "other_per"
+--                           }
+--
+--        st = f ! SqlFileCashe GetUnhashed
+--
+--        source :: MonadIO m
+--               => C.Source m File
+--        source =  liftIO (fetchRowMap st)
+--                  >>= maybe (return ())
+--                            (\r -> do C.yield (toFile r)
+--                                      source)
+--
+--    in do liftIO $! void (execute st [])
+--          source
+--
