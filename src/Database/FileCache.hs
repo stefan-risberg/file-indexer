@@ -22,22 +22,22 @@ module Database.FileCache
 
 , updateHash
 , updateHash'
---, getUnhashed
+, getUnhashed
 ) where
 
 import Database
 import Database.Esqueleto
 
-import Data.Text (pack, Text)
+import Data.Text (pack, unpack, Text)
 import Data.Int (Int64)
 import Data.Word (Word64)
 import Data.Time (UTCTime)
 import Data.LargeWord (Word128)
 
 import qualified Types.File as F
-import Types.Permission (permissionToWord, Permission)
+import Types.Permission (permissionToWord, Permission, wordToPermission)
 
-import System.FilePath (takeFileName, dropFileName)
+import System.FilePath (takeFileName, dropFileName, (</>))
 
 import qualified Control.Lens as L
 import Control.Monad.IO.Class (MonadIO)
@@ -192,34 +192,32 @@ updateHash' :: MonadIO m
 updateHash' i w =
     updateHash i (pack $ showHex w "")
 
----- | Create a conduit source of all unhashed values.
---getUnhashed :: MonadIO m
---            => SqlConn -- ^ DB connection.
---            -> C.Source m File
---getUnhashed (SqlConnT _ f) =
---    let toFile :: Map String SqlValue
---               -> File
---        toFile m = let file = fromSql $ m ! "name"
---                       dir  = fromSql $ m ! "location"
---                   in File { _id         = fromSql $ m ! "id"
---                           , _path       = dir </> file
---                           , _size       = fromSql $ m ! "size"
---                           , _accessTime = fromSql $ m ! "access_time"
---                           , _modTime    = fromSql $ m ! "mod_time"
---                           , _user       = fromSql $ m ! "user_per"
---                           , _group      = fromSql $ m ! "group_per"
---                           , _other      = fromSql $ m ! "other_per"
---                           }
---
---        st = f ! SqlFileCashe GetUnhashed
---
---        source :: MonadIO m
---               => C.Source m File
---        source =  liftIO (fetchRowMap st)
---                  >>= maybe (return ())
---                            (\r -> do C.yield (toFile r)
---                                      source)
---
---    in do liftIO $! void (execute st [])
---          source
---
+-- | Create a conduit source of all unhashed values.
+getUnhashed :: MonadIO m
+            => ReaderT SqlBackend m [F.File]
+getUnhashed = do
+    let conv p = F.File { F._id = Nothing
+                        , F._path = (unpack $ unValue $ L.view L._3 p)
+                                </> (unpack $ unValue $ L.view L._2 p)
+                        , F._size = unValue $ L.view L._4 p
+                        , F._accessTime = unValue $ L.view L._5 p
+                        , F._modTime = unValue $ L.view L._6 p
+                        , F._user = wordToPermission $! unValue $ L.view L._7 p
+                        , F._group = wordToPermission $! unValue $ L.view L._8 p
+                        , F._other = wordToPermission $! unValue $ L.view L._9 p
+                        }
+    v <- select $
+            from $ \(file, hash) -> do
+                where_ (hash ^. HashFile !=. file ^. FileId)
+                return ( file ^. FileId
+                       , file ^. FileName
+                       , file ^. FileLocation
+                       , file ^. FileSize
+                       , file ^. FileAccessTime
+                       , file ^. FileModTime
+                       , file ^. FileUserPer
+                       , file ^. FileGroupPer
+                       , file ^. FileOtherPer
+                       )
+
+    return $! map conv v
