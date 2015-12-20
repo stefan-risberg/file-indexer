@@ -91,6 +91,7 @@ fileExists file =
                 return a)
          >>= \c -> return $! 0 < ((unValue $ head c) :: Int)
 
+-- | Generic update of field for a file.
 updateField :: (MonadIO m, PersistField typ)
             => EntityField File typ
             -> Int64
@@ -183,6 +184,7 @@ updateHash i t =
         set h [ HashHash =. val t ]
         where_ (h ^. HashFile ==. val (toSqlKey i))
 
+-- | Update hash of a file.
 updateHash' :: MonadIO m
             => Int64
             -> Word128
