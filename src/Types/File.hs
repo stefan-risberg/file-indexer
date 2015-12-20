@@ -12,6 +12,7 @@ module Types.File
 , other
 ) where
 
+import           Data.Word (Word64)
 import           Data.Int (Int64)
 import qualified Types.Permission as P
 import           Data.Time.Clock
@@ -20,9 +21,9 @@ import           Control.Lens
 
 import           Prelude hiding (id)
 
-data File = File { _id         :: Int
+data File = File { _id         :: Maybe Int64
                  , _path       :: FilePath
-                 , _size       :: Int64
+                 , _size       :: Word64
                  , _accessTime :: UTCTime
                  , _modTime    :: UTCTime
                  , _user       :: P.Permission
