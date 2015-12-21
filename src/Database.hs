@@ -15,7 +15,7 @@ import Data.ByteString (ByteString)
 import Data.Time.Clock (UTCTime)
 
 
-share [mkPersist sqlSettings, mkMigrate "fileIndex"] [persistLowerCase|
+share [mkPersist sqlSettings { mpsGenerateLenses = True }, mkMigrate "fileIndex"] [persistLowerCase|
 File
     name       Text
     location   Text
@@ -40,4 +40,3 @@ Job
     done Bool default=True
     deriving Show
 |]
-
