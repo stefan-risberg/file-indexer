@@ -194,21 +194,24 @@ updateHash' i w =
 -- | Create a conduit source of all unhashed values.
 getUnhashed :: MonadIO m
             => SqlPersistT m [F.File]
-getUnhashed = do
+getUnhashed =
     let conv :: Int64 -> File -> F.File
         conv i f = F.File { F._id = Just i
-                        , F._path = (unpack $ f L.^. fileLocation)
-                                </> (unpack $ f L.^. fileName)
-                        , F._size = f L.^. fileSize
-                        , F._accessTime = f L.^. fileAccessTime
-                        , F._modTime = f L.^. fileModTime
-                        , F._user = wordToPermission $! f L.^. fileUserPer
-                        , F._group = wordToPermission $! f L.^. fileGroupPer
-                        , F._other = wordToPermission $! f L.^. fileOtherPer
-                        }
-    (select $
-     from $ \(file, hash) -> do
-         where_ (hash ^. HashFile !=. file ^. FileId)
-         return file) >>= mapM (\f -> let v = entityVal f
-                                          i = fromSqlKey (entityKey f)
-                                       in return $! conv i v)
+                          , F._path = (unpack $ f L.^. fileLocation)
+                                  </> (unpack $ f L.^. fileName)
+                          , F._size = f L.^. fileSize
+                          , F._accessTime = f L.^. fileAccessTime
+                          , F._modTime = f L.^. fileModTime
+                          , F._user = wordToPermission $! f L.^. fileUserPer
+                          , F._group = wordToPermission $! f L.^. fileGroupPer
+                          , F._other = wordToPermission $! f L.^. fileOtherPer
+                          }
+    in (select $
+        from $ \file -> do
+            where_ $ notExists $
+                     from $ \hash -> do
+                     where_ (hash ^. HashFile ==. file ^. FileId)
+            return file)
+           >>= mapM (\f -> let v = entityVal f
+                               i = fromSqlKey (entityKey f)
+                            in return $! conv i v)
