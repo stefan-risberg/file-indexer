@@ -1,4 +1,4 @@
-module Database.HashStatus
+module Database.Job
 ( newJob
 , updateJob
 , completeJob
