@@ -20,7 +20,6 @@ import           Crypto.Hash.MD5 ( init
 import           Control.Monad.Trans.Resource
 import           Prelude hiding (init)
 
-
 createHash :: MonadResource m
            => Sink ByteString m Word128
 createHash =

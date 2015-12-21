@@ -13,7 +13,6 @@ import Data.Text (Text)
 import Data.Word (Word8, Word64)
 import Data.Time.Clock (UTCTime)
 
-
 share [mkPersist sqlSettings { mpsGenerateLenses = True }, mkMigrate "fileIndex"] [persistLowerCase|
 File
     name       Text

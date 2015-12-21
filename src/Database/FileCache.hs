@@ -1,7 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RankNTypes       #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-
 module Database.FileCache
 ( insertFile
 , removeFile
@@ -18,6 +14,7 @@ module Database.FileCache
 , updateOther
 
 , insertHash
+, insertHash'
 , removeHash
 
 , updateHash
@@ -164,6 +161,13 @@ insertHash :: MonadIO m
            -> Text    -- ^ Hash.
            -> SqlPersistT m ()
 insertHash i h = void $ insert $ Hash (toSqlKey i) h
+
+-- | Insert a new hash for a file.
+insertHash' :: MonadIO m
+            => Int64   -- ^ File id.
+            -> Word128 -- ^ Hash.
+            -> SqlPersistT m ()
+insertHash' i h = insertHash i (pack $ showHex h "")
 
 -- | Remove hash of a file.
 removeHash :: MonadIO m
