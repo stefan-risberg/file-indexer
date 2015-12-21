@@ -42,7 +42,6 @@ import System.FilePath (takeFileName, dropFileName, (</>))
 import qualified Control.Lens as L
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad (void)
-import Control.Monad.Reader (ReaderT)
 
 import Numeric (showHex)
 
@@ -50,7 +49,7 @@ import Numeric (showHex)
 --   If it is Just i the id on the database will be set to i.
 insertFile :: MonadIO m
            => F.File                      -- ^ File to add
-           -> ReaderT SqlBackend m F.File -- ^ File returned with the id set.
+           -> SqlPersistT m F.File -- ^ File returned with the id set.
 insertFile file =
     let f = File (pack $! takeFileName $ L.view F.path file)
                  (pack $! dropFileName $ L.view F.path file)
@@ -70,7 +69,7 @@ insertFile file =
 -- | Removes a file.
 removeFile :: MonadIO m
            => F.File -- ^ File to remove.
-           -> ReaderT SqlBackend m ()
+           -> SqlPersistT m ()
 removeFile file = maybe (return ())
                         (\i -> delete $
                                from $ \f ->
@@ -80,7 +79,7 @@ removeFile file = maybe (return ())
 -- | Check for file existance.
 fileExists :: MonadIO m
            => F.File -- ^ File to check if it exists.
-           -> ReaderT SqlBackend m Bool
+           -> SqlPersistT m Bool
 fileExists file =
     select (from $ \n -> do
                 let a = count (n ^. FileId)
@@ -107,69 +106,69 @@ updateField f i d =
 updateName :: MonadIO m
            => Int64    -- ^ File id
            -> FilePath -- ^ New Name
-           -> ReaderT SqlBackend m ()
+           -> SqlPersistT m ()
 updateName i n = updateField FileName i (pack n)
 
 -- | Update location of file.
 updateLocation :: MonadIO m
                => Int64    -- ^ File id.
                -> FilePath -- ^ New location.
-               -> ReaderT SqlBackend m ()
+               -> SqlPersistT m ()
 updateLocation i fp = updateField FileLocation i (pack fp)
 
 -- | Update size of file.
 updateSize :: MonadIO m
            => Int64  -- ^ File id.
            -> Word64 -- ^ New size.
-           -> ReaderT SqlBackend m ()
+           -> SqlPersistT m ()
 updateSize = updateField FileSize
 
 -- | Update access time of tile.
 updateAccessTime :: MonadIO m
                  => Int64   -- ^ File id.
                  -> UTCTime -- ^ New access time.
-                 -> ReaderT SqlBackend m ()
+                 -> SqlPersistT m ()
 updateAccessTime = updateField FileAccessTime
 
 -- | Update modification time of file
 updateModTime :: MonadIO m
               => Int64     -- ^ File id.
               -> UTCTime -- ^ New modification time.
-              -> ReaderT SqlBackend m ()
+              -> SqlPersistT m ()
 updateModTime = updateField FileModTime
 
 -- | Update user permissions of file.
 updateUser :: MonadIO m
            => Int64      -- ^ File id.
            -> Permission -- ^ New user permission.
-           -> ReaderT SqlBackend m ()
+           -> SqlPersistT m ()
 updateUser i p = updateField FileUserPer i (permissionToWord p)
 
 -- | Update group permissions of file.
 updateGroup :: MonadIO m
             => Int64        -- ^ File id.
             -> Permission -- ^ New group permission.
-            -> ReaderT SqlBackend m ()
+            -> SqlPersistT m ()
 updateGroup i p = updateField FileGroupPer i (permissionToWord p)
 
 -- | Update other permissions of file.
 updateOther :: MonadIO m
             => Int64      -- ^ File id.
             -> Permission -- ^ New other permission.
-            -> ReaderT SqlBackend m ()
+            -> SqlPersistT m ()
 updateOther i p = updateField FileOtherPer i (permissionToWord p)
 
 -- | Insert a new hash for a file.
 insertHash :: MonadIO m
            => Int64   -- ^ File id.
            -> Text    -- ^ Hash.
-           -> ReaderT SqlBackend m ()
+           -> SqlPersistT m ()
 insertHash i h = void $ insert $ Hash (toSqlKey i) h
 
 -- | Remove hash of a file.
 removeHash :: MonadIO m
            => Int64 -- ^ Id of file.
-           -> ReaderT SqlBackend m ()
+           -> SqlPersistT m ()
 removeHash i = delete
              $ from
              $ \h -> where_ (h ^. HashFile ==. val (toSqlKey i))
@@ -178,7 +177,7 @@ removeHash i = delete
 updateHash :: MonadIO m
            => Int64 -- ^ File id.
            -> Text  -- ^ Hash as text.
-           -> ReaderT SqlBackend m ()
+           -> SqlPersistT m ()
 updateHash i t =
     update $ \h -> do
         set h [ HashHash =. val t ]
@@ -188,7 +187,7 @@ updateHash i t =
 updateHash' :: MonadIO m
             => Int64
             -> Word128
-            -> ReaderT SqlBackend m ()
+            -> SqlPersistT m ()
 updateHash' i w =
     updateHash i (pack $ showHex w "")
 
