@@ -194,30 +194,22 @@ updateHash' i w =
 
 -- | Create a conduit source of all unhashed values.
 getUnhashed :: MonadIO m
-            => ReaderT SqlBackend m [F.File]
+            => SqlPersistT m [F.File]
 getUnhashed = do
-    let conv p = F.File { F._id = Nothing
-                        , F._path = (unpack $ unValue $ L.view L._3 p)
-                                </> (unpack $ unValue $ L.view L._2 p)
-                        , F._size = unValue $ L.view L._4 p
-                        , F._accessTime = unValue $ L.view L._5 p
-                        , F._modTime = unValue $ L.view L._6 p
-                        , F._user = wordToPermission $! unValue $ L.view L._7 p
-                        , F._group = wordToPermission $! unValue $ L.view L._8 p
-                        , F._other = wordToPermission $! unValue $ L.view L._9 p
+    let conv :: Int64 -> File -> F.File
+        conv i f = F.File { F._id = Just i
+                        , F._path = (unpack $ f L.^. fileLocation)
+                                </> (unpack $ f L.^. fileName)
+                        , F._size = f L.^. fileSize
+                        , F._accessTime = f L.^. fileAccessTime
+                        , F._modTime = f L.^. fileModTime
+                        , F._user = wordToPermission $! f L.^. fileUserPer
+                        , F._group = wordToPermission $! f L.^. fileGroupPer
+                        , F._other = wordToPermission $! f L.^. fileOtherPer
                         }
-    v <- select $
-            from $ \(file, hash) -> do
-                where_ (hash ^. HashFile !=. file ^. FileId)
-                return ( file ^. FileId
-                       , file ^. FileName
-                       , file ^. FileLocation
-                       , file ^. FileSize
-                       , file ^. FileAccessTime
-                       , file ^. FileModTime
-                       , file ^. FileUserPer
-                       , file ^. FileGroupPer
-                       , file ^. FileOtherPer
-                       )
-
-    return $! map conv v
+    (select $
+     from $ \(file, hash) -> do
+         where_ (hash ^. HashFile !=. file ^. FileId)
+         return file) >>= mapM (\f -> let v = entityVal f
+                                          i = fromSqlKey (entityKey f)
+                                       in return $! conv i v)
