@@ -11,7 +11,6 @@ module Database where
 import Database.Persist.TH
 import Data.Text (Text)
 import Data.Word (Word8, Word64)
-import Data.ByteString (ByteString)
 import Data.Time.Clock (UTCTime)
 
 
@@ -31,12 +30,5 @@ File
 Hash
     file     FileId
     hash     Text
-    deriving Show
-
-Job
-    file FileId
-    at   Word64
-    ctx  ByteString
-    done Bool default=True
     deriving Show
 |]
