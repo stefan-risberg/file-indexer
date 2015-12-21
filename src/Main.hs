@@ -3,19 +3,24 @@ module Main where
 
 import FileSystem
 import Types.File (path)
-import Database
+import Database (fileIndex)
 import qualified Database.FileCache as FC
+import Database.Persist
+import Database.Persist.Sqlite
 
 import Control.Lens
 import Control.Monad (liftM, filterM)
-
-import System.Environment (getArgs)
+import Control.Monad.IO.Class (liftIO)
 
 main :: IO ()
-main = do
-    c <- connect "./test/dasabase.test.sql"
-    files <- getAllFiles "./test/files"
-             >>= filterM (\f -> FC.fileExists c f >>= return . not)
-    mapM_ (\x -> print (x ^. path)) files
+main = runSqlite "./test/database.test.sql" $ do
+    runMigration fileIndex
+    files <- (liftIO $! getAllFiles "./test/files")
+             >>= filterM (liftM not  . FC.fileExists)
+
+    liftIO $! print (length files)
+    mapM_ FC.insertFile files
+
+    FC.getUnhashed >>= liftIO . print . length
 
     return ()
