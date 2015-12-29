@@ -1,5 +1,5 @@
 module FileSystem
-( getFileStatus
+( fileStatus
 , directoryContent
 , filterFiles
 , filterDirectorys
@@ -31,12 +31,12 @@ import           Control.Monad         (liftM)
 import           Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import           Data.Maybe            (fromJust)
 
-getFileStatus :: FilePath
-              -> IO (Maybe FileStatus)
-getFileStatus fp = catchIOError (P.getFileStatus fp >>= return . Just)
-                                (\e -> if isDoesNotExistError e
-                                           then return Nothing
-                                           else ioError e)
+fileStatus :: FilePath
+           -> IO (Maybe FileStatus)
+fileStatus fp = catchIOError (P.getFileStatus fp >>= return . Just)
+                             (\e -> if isDoesNotExistError e
+                                        then return Nothing
+                                        else ioError e)
 
 -- |Strict directory and status fetcher. Returns empty if no content or not a
 -- directory.
@@ -49,11 +49,11 @@ directoryContent fp = do
         filterDots ".." = False
         filterDots _ = True
 
-    is <- liftM (maybe False isDirectory) (getFileStatus fp)
+    is <- liftM (maybe False isDirectory) (fileStatus fp)
     if is
         then (do cont <- liftM (map (fp </>) . filter filterDots)
                                (getDirectoryContents fp)
-                 stat <- mapM (liftM fromJust . getFileStatus) cont
+                 stat <- mapM (liftM fromJust . fileStatus) cont
                  return $! zip cont stat)
         else return []
 
