@@ -33,10 +33,11 @@ import           Data.Maybe            (fromJust)
 
 fileStatus :: FilePath
            -> IO (Maybe FileStatus)
-fileStatus fp = catchIOError (P.getFileStatus fp >>= return . Just)
-                             (\e -> if isDoesNotExistError e
-                                        then return Nothing
-                                        else ioError e)
+fileStatus fp =
+    catchIOError (P.getFileStatus fp >>= return . Just)
+                 (\e -> if isDoesNotExistError e
+                            then return Nothing
+                            else ioError e)
 
 -- |Strict directory and status fetcher. Returns empty if no content or not a
 -- directory.
