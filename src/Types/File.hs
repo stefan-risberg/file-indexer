@@ -21,14 +21,14 @@ import           Control.Lens
 
 import           Prelude hiding (id)
 
-data File = File { _id         :: Maybe Int64
-                 , _path       :: FilePath
-                 , _size       :: Word64
-                 , _accessTime :: UTCTime
-                 , _modTime    :: UTCTime
-                 , _user       :: P.Permission
-                 , _group      :: P.Permission
-                 , _other      :: P.Permission
+data File = File { _id         :: !(Maybe Int64)
+                 , _path       :: !FilePath
+                 , _size       :: !Word64
+                 , _accessTime :: !UTCTime
+                 , _modTime    :: !UTCTime
+                 , _user       :: !P.Permission
+                 , _group      :: !P.Permission
+                 , _other      :: !P.Permission
                  }
 
 makeLenses ''File
