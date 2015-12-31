@@ -60,7 +60,7 @@ main = do
 
     runSqlite "file-cache.db" $ do
         runMigration fileIndex
-        (io $! getAllFiles dir)
+        (io $! getFiles dir)
             >>= filterM (liftM not  . DB.fileExists)
             >>= mapM_ DB.insertFile
 
