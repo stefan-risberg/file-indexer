@@ -40,8 +40,8 @@ runHashes :: MonadIO m
           -> E.SqlPersistT m ()
 runHashes _ [] = return ()
 runHashes v (f:fs) = do
-    io $! putStrLn $ "Hashing -- " ++ (takeFileName $! f ^. path)
-    (io $! hash (f ^. path))
+    io (putStrLn $ "Hashing -- " ++ (takeFileName $! f ^. path))
+    io (hash (f ^. path))
         >>= DB.insertHash' (fromJust $! f ^. id)
     io $! threadDelay 0
     e <- io $ isEmptyMVar v
