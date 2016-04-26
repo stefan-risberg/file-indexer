@@ -3,4 +3,4 @@ dist
 test
 *.db
 *.swp
-.stack.work
+.stack-work
