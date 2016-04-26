@@ -21,7 +21,7 @@ import System.Posix.Signals
 import System.FilePath (takeFileName)
 import System.Environment (getArgs)
 
-import Hash (hash)
+--import Hash (hash)
 
 io :: MonadIO m
    => IO a
@@ -41,8 +41,8 @@ runHashes :: MonadIO m
 runHashes _ [] = return ()
 runHashes v (f:fs) = do
     io (putStrLn $ "Hashing -- " ++ (takeFileName $! f ^. path))
-    io (hash (f ^. path))
-        >>= DB.insertHash' (fromJust $! f ^. id)
+    --io (hash (f ^. path))
+    --    >>= DB.insertHash' (fromJust $! f ^. id)
     io $! threadDelay 0
     e <- io $ isEmptyMVar v
     if e
@@ -58,15 +58,25 @@ main = do
                            (Catch $! handClose v)
                            Nothing
 
-    runSqlite "file-cache.db" $ do
-        runMigration fileIndex
-        (io $! getFiles dir)
-            >>= filterM (liftM not  . DB.fileExists)
-            >>= mapM_ DB.insertFile
+    files <- getFiles dir
 
-        io $ putStrLn "Start file hasing:"
-        DB.getUnhashed >>= runHashes v
-        io $ putStrLn "Done hashing and result is written to database."
-
-        return ()
     return ()
+    where
+        endLoop :: MVar () -> IO Bool
+        endLoop = liftM not . isEmptyMVar
+
+        loop :: [File] -> IO ()
+        loop [] = return ()
+
+
+    --runSqlite "file-cache.db" $ do
+    --    runMigration fileIndex
+    --    (io $! getFiles dir)
+    --        >>= filterM (liftM not  . DB.fileExists)
+    --        >>= mapM_ DB.insertFile
+
+    --    io $ putStrLn "Start file hasing:"
+    --    DB.getUnhashed >>= runHashes v
+    --    io $ putStrLn "Done hashing and result is written to database."
+
+    --    return ()
