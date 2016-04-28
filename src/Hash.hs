@@ -1,6 +1,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
-module Hash where
+module Hash
+( HashJob (..)
+, idL
+, fileL
+, fileAtL
+, ctxL
+, newHashJob
+, runHashJob
+) where
 
 import           Data.Conduit ( Sink
                               , Source
@@ -59,18 +67,16 @@ newHashJob i f = HashJob { _idL = i
                          }
 
 -- | Reads a file with 4096 bytestrings.
-readBlock :: FilePath -- ^ File to start reading.
-          -> Maybe Int -- ^ Where to start reading from.
-          -> Source (Job HashJob) ByteString
-readBlock fp at = do
-    hand <- lift . ioJob $! openFile fp ReadMode
+blockSource :: FilePath -- ^ File to start reading.
+            -> Int      -- ^ Where to start reading from.
+            -> Source (Job HashJob) ByteString
+blockSource fp at = do
+    hand <- liftIO $! openFile fp ReadMode
 
-    lift . ioJob $ maybe (return ())
-                         (hSeek hand AbsoluteSeek . fromIntegral)
-                         at
+    liftIO $ hSeek hand AbsoluteSeek (fromIntegral at)
 
     run hand
-    lift . ioJob $ hClose hand
+    liftIO $ hClose hand
     return ()
     where
         -- | Reads a block. Returns Nothing when the handle is eof.
@@ -84,7 +90,7 @@ readBlock fp at = do
         run :: Handle
             -> Source (Job HashJob) ByteString
         run h = do
-            lift (ioJob $ consumeHand h)
+            (liftIO $ consumeHand h)
             >>= maybe (return ())
                       (\bs -> yield bs >> run h)
 
@@ -102,18 +108,19 @@ hashSink j = do
                       j' = j & fileAtL .~ (len + (j ^. fileAtL))
                              & ctxL .~ ctx
                   in hashSink j'
-        end = return $! Right (decode . fromStrict . (j ^. finL) $ j ^. ctxL)
+        end = do
+            return $! Right (decode . fromStrict . (j ^. finL) $ j ^. ctxL)
 
 -- | Runs a HashJob.
 runHashJob :: HashJob
            -> IO (JobKey HashJob Word128)
 runHashJob j =
-    runJob job
+    spawnJob job
 
     where
         job :: Job HashJob Word128
         job = do
-            r <- readBlock (j ^. fileL) (Just $ j ^. fileAtL)
+            r <- blockSource (j ^. fileL) (j ^. fileAtL)
               $$ hashSink j
 
             case r of

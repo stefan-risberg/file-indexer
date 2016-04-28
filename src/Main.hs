@@ -3,25 +3,29 @@ module Main where
 
 import Prelude hiding (id)
 import FileSystem
-import Data.Maybe (fromJust)
-import Types.File (path, File, id)
-import Database (fileIndex)
-import qualified Database.FileCache as DB
-import Database.Persist.Sqlite
-import qualified Database.Esqueleto as E
+--import Data.Maybe (fromJust)
+import Types.File (path, File)
+--import Database (fileIndex)
+--import qualified Database.FileCache as DB
+--import Database.Persist.Sqlite
+--import qualified Database.Esqueleto as E
 
 import Control.Lens
-import Control.Monad (liftM, filterM, void)
+import Control.Monad (liftM, void)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 
 import Control.Concurrent.MVar
 import Control.Concurrent (threadDelay)
 
 import System.Posix.Signals
-import System.FilePath (takeFileName)
+--import System.FilePath (takeFileName)
 import System.Environment (getArgs)
 
---import Hash (hash)
+import qualified Hash as H
+import qualified Job as J
+
+import           Data.LargeWord (Word128)
+import           Numeric (showHex)
 
 io :: MonadIO m
    => IO a
@@ -34,20 +38,10 @@ handClose v = do
     putStrLn $! "Close signal"
     putMVar v ()
 
-runHashes :: MonadIO m
-          => MVar () -- ^ To check if Ctrl-C was pressed
-          -> [File] -- ^ Files to hash.
-          -> E.SqlPersistT m ()
-runHashes _ [] = return ()
-runHashes v (f:fs) = do
-    io (putStrLn $ "Hashing -- " ++ (takeFileName $! f ^. path))
-    --io (hash (f ^. path))
-    --    >>= DB.insertHash' (fromJust $! f ^. id)
-    io $! threadDelay 0
-    e <- io $ isEmptyMVar v
-    if e
-        then runHashes v fs
-        else return ()
+getHex :: Word128 -> String
+getHex w = let h = showHex w ""
+               zero = map (const '0') [0 .. (31 - (length h))]
+            in zero ++ h
 
 main :: IO ()
 main = do
@@ -60,23 +54,30 @@ main = do
 
     files <- getFiles dir
 
+    loop files v
+
     return ()
+
     where
-        endLoop :: MVar () -> IO Bool
-        endLoop = liftM not . isEmptyMVar
+        hashLoop :: J.JobKey H.HashJob Word128 -> MVar () -> IO (Maybe Word128)
+        hashLoop key pause = do
+            threadDelay 50
+            p <- liftM not (isEmptyMVar pause)
+            k <- J.jobDone key
 
-        loop :: [File] -> IO ()
-        loop [] = return ()
+            if p
+                then (J.jobPause key >> return Nothing)
+                else if k
+                    then J.jobResult key >>= return . Just
+                    else hashLoop key pause
+        loop :: [File] -> MVar () -> IO ()
+        loop [] _ = putStrLn "End of all files."
+        loop (f:fx) p = do
+            let hj = H.newHashJob 0 (f ^. path)
+            key <- H.runHashJob hj
+            r <- hashLoop key p
 
-
-    --runSqlite "file-cache.db" $ do
-    --    runMigration fileIndex
-    --    (io $! getFiles dir)
-    --        >>= filterM (liftM not  . DB.fileExists)
-    --        >>= mapM_ DB.insertFile
-
-    --    io $ putStrLn "Start file hasing:"
-    --    DB.getUnhashed >>= runHashes v
-    --    io $ putStrLn "Done hashing and result is written to database."
-
-    --    return ()
+            case r of
+                Just x -> (do putStrLn $! (getHex x) ++ ":  " ++ (f ^. path)
+                              loop fx p)
+                Nothing -> (putStrLn "Interrupted")
