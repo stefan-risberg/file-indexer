@@ -1,9 +1,9 @@
-{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE OverloadedStrings                #-}
+{-# LANGUAGE DeriveDataTypeable, TypeFamilies #-}
 module Main where
 
 import Prelude hiding (id)
 import FileSystem
---import Data.Maybe (fromJust)
 import Types.File (path, File)
 --import Database (fileIndex)
 --import qualified Database.FileCache as DB
@@ -11,7 +11,7 @@ import Types.File (path, File)
 --import qualified Database.Esqueleto as E
 
 import Control.Lens
-import Control.Monad (liftM, void)
+import Control.Monad (liftM, void, when)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 
 import Control.Concurrent.MVar
@@ -26,6 +26,10 @@ import qualified Job as J
 
 import           Data.LargeWord (Word128)
 import           Numeric (showHex)
+
+import           Graphics.QML
+import           Data.Text (Text)
+import qualified Data.Text as T
 
 io :: MonadIO m
    => IO a
@@ -45,16 +49,30 @@ getHex w = let h = showHex w ""
 
 main :: IO ()
 main = do
-    dir <- liftM head getArgs
-
     v <- newEmptyMVar :: IO (MVar ())
     void $! installHandler keyboardSignal
                            (Catch $! handClose v)
                            Nothing
 
-    files <- getFiles dir
+    clazz <- newClass
+        [ defMethod' "scanDirectory" (\_ txt -> do
+            files <- liftM (map (view path)) . getFiles $ T.unpack txt
+            return . T.pack . unlines $ files :: IO Text)
+        , defMethod' "cleanPath" (\_ txt ->
+            let p = T.take 7 txt
+                r = if p == "file://"
+                        then T.drop 7 txt
+                        else txt
+            in return r :: IO Text)
+        ]
+    ctx <- newObject clazz ()
 
-    loop files v
+    runEngineLoop defaultEngineConfig {
+        initialDocument = fileDocument "qml/test.qml",
+        contextObject = Just $ anyObjRef ctx
+    }
+
+    --loop files v
 
     return ()
 
@@ -70,6 +88,7 @@ main = do
                 else if k
                     then J.jobResult key >>= return . Just
                     else hashLoop key pause
+
         loop :: [File] -> MVar () -> IO ()
         loop [] _ = putStrLn "End of all files."
         loop (f:fx) p = do
